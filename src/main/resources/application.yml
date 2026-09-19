@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: UNIQUE
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/unique?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:1234}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  event:
+    dates: ${EVENT_DATES:2026-09-21,2026-09-22}
+    zone-id: ${EVENT_ZONE_ID:Asia/Seoul}
+    open-at: "${EVENT_OPEN_AT:09:00}"
+    close-at: "${EVENT_CLOSE_AT:16:00}"
+    result-at: "${EVENT_RESULT_AT:17:00}"
+    enforce-schedule: ${EVENT_ENFORCE_SCHEDULE:false}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://festival-vault-design.vercel.app}
+  participant-cookie:
+    secure: ${COOKIE_SECURE:false}
+    same-site: ${COOKIE_SAME_SITE:Lax}
+    max-age-days: ${COOKIE_MAX_AGE_DAYS:30}
