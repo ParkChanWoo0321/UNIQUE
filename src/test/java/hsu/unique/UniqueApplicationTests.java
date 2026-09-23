@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import hsu.unique.game.repository.GameResultRepository;
 import hsu.unique.game.repository.SubmissionRepository;
+import hsu.unique.game.entity.GameResult;
+import hsu.unique.game.entity.Submission;
 import hsu.unique.operation.repository.BonusEventRepository;
 import hsu.unique.participant.entity.DailyParticipation;
 import hsu.unique.participant.entity.Participant;
@@ -223,6 +225,116 @@ class UniqueApplicationTests {
     }
 
     @Test
+    void overallRecalculationExcludesCrossDayDuplicatesAndPreservesDailyResults() throws Exception {
+        String first = initialize(DAY_ONE);
+        createEntry(first, DAY_ONE, "[1,2,8]", "01011112222", true, 200);
+        String second = initialize(DAY_TWO);
+        createEntry(second, DAY_TWO, "[1,2,3]", "01033334444", true, 200);
+        mockMvc.perform(post("/api/operations/finish").queryParam("eventDate", DAY_ONE.toString()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/operations/finish").queryParam("eventDate", DAY_TWO.toString()))
+                .andExpect(status().isOk());
+        GameResult firstResult = gameResultRepository.findByEventDate(DAY_ONE).orElseThrow();
+        GameResult secondResult = gameResultRepository.findByEventDate(DAY_TWO).orElseThrow();
+        var submissionsBefore = submissionRepository.findAll();
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            mockMvc.perform(post("/api/operations/recalculate"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.eventDates[0]").value(DAY_ONE.toString()))
+                    .andExpect(jsonPath("$.eventDates[1]").value(DAY_TWO.toString()))
+                    .andExpect(jsonPath("$.winningNumber").value("0003"))
+                    .andExpect(jsonPath("$.winnerFound").value(true))
+                    .andExpect(jsonPath("$.winnerPhoneNumber").value("01033334444"))
+                    .andExpect(jsonPath("$.calculatedAt").isNotEmpty());
+        }
+
+        assertThat(gameResultRepository.count()).isEqualTo(2);
+        assertThat(gameResultRepository.findByEventDate(DAY_ONE).orElseThrow())
+                .usingRecursiveComparison().ignoringFields("winningSubmission", "winnerParticipant")
+                .isEqualTo(firstResult);
+        assertThat(gameResultRepository.findByEventDate(DAY_TWO).orElseThrow())
+                .usingRecursiveComparison().ignoringFields("winningSubmission", "winnerParticipant")
+                .isEqualTo(secondResult);
+        assertThat(submissionRepository.findAll())
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("participant")
+                .containsExactlyInAnyOrderElementsOf(submissionsBefore);
+        submitNumber(first, DAY_ONE, 10, 409)
+                .andExpect(jsonPath("$.code").value("GAME_CLOSED"));
+    }
+
+    @Test
+    void overallRecalculationUsesCurrentSubmissionsOnEveryCall() throws Exception {
+        String first = initialize(DAY_ONE);
+        createEntry(first, DAY_ONE, "[4,5,6]", "01011112222", true, 200);
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winningNumber").value("0004"));
+
+        String second = initialize(DAY_TWO);
+        createEntry(second, DAY_TWO, "[4,5,7]", "01033334444", true, 200);
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winningNumber").value("0006"))
+                .andExpect(jsonPath("$.winnerPhoneNumber").value("01011112222"));
+        assertThat(gameResultRepository.count()).isZero();
+        assertThat(submissionRepository.count()).isEqualTo(6);
+    }
+
+    @Test
+    void overallRecalculationCountsSameParticipantCrossDayDuplicatesAndUsesWinningDayPhone() throws Exception {
+        String token = initialize(DAY_ONE);
+        createEntry(token, DAY_ONE, "[0,1,9]", "01011112222", true, 200);
+        mockMvc.perform(post("/api/participants/initialize")
+                        .queryParam("eventDate", DAY_TWO.toString()).cookie(cookie(token)))
+                .andExpect(status().isOk());
+        createEntry(token, DAY_TWO, "[0,1,2]", "01033334444", true, 200);
+
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winningNumber").value("0002"))
+                .andExpect(jsonPath("$.winnerPhoneNumber").value("01033334444"));
+    }
+
+    @Test
+    void overallRecalculationReturnsNoWinnerWhenEveryNumberIsDuplicated() throws Exception {
+        String first = initialize(DAY_ONE);
+        createEntry(first, DAY_ONE, "[0,1,2]", "01011112222", true, 200);
+        String second = initialize(DAY_TWO);
+        createEntry(second, DAY_TWO, "[0,1,2]", "01033334444", true, 200);
+
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winnerFound").value(false))
+                .andExpect(jsonPath("$.winningNumber").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.winnerPhoneNumber").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void overallRecalculationReturnsNoWinnerWhenThereAreNoSubmissions() throws Exception {
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winnerFound").value(false))
+                .andExpect(jsonPath("$.winningNumber").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.winnerPhoneNumber").value(org.hamcrest.Matchers.nullValue()));
+        assertThat(gameResultRepository.count()).isZero();
+    }
+
+    @Test
+    void overallRecalculationIgnoresSubmissionsOutsideConfiguredEventDates() throws Exception {
+        String token = initialize(DAY_ONE);
+        createEntry(token, DAY_ONE, "[0,100,9999]", "01011112222", true, 200);
+        Participant participant = participantRepository.findByParticipantToken(token).orElseThrow();
+        submissionRepository.saveAndFlush(Submission.create(participant, DAY_TWO.plusDays(1), 0));
+        submissionRepository.saveAndFlush(Submission.create(participant, null, 0));
+
+        mockMvc.perform(post("/api/operations/recalculate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.winningNumber").value("0000"))
+                .andExpect(jsonPath("$.winnerPhoneNumber").value("01011112222"));
+    }
+
+    @Test
     void publicStatusMatchesFrontendAndCorsAllowsDeployedOrigin() throws Exception {
         String token = initialize(DAY_ONE);
         createEntry(token, DAY_ONE, "[11,12,13]", "01012345678", true, 200);
@@ -251,7 +363,8 @@ class UniqueApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/game/entries']").exists())
                 .andExpect(jsonPath("$.paths['/api/game/status']").exists())
-                .andExpect(jsonPath("$.paths['/api/operations/finish']").exists());
+                .andExpect(jsonPath("$.paths['/api/operations/finish']").exists())
+                .andExpect(jsonPath("$.paths['/api/operations/recalculate']").exists());
     }
 
     @Test

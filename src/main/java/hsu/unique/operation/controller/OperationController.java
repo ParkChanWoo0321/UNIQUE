@@ -2,6 +2,7 @@ package hsu.unique.operation.controller;
 
 import hsu.unique.operation.dto.BonusExecutionResponse;
 import hsu.unique.operation.dto.FinishGameResponse;
+import hsu.unique.operation.dto.OverallGameResultResponse;
 import hsu.unique.operation.service.OperationService;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -25,6 +26,11 @@ public class OperationController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventDate) {
         return operationService.executeBonus(eventDate);
+    }
+
+    @PostMapping("/recalculate")
+    public OverallGameResultResponse recalculateOverallResult() {
+        return operationService.recalculateOverallResult();
     }
 
     @PostMapping("/finish")

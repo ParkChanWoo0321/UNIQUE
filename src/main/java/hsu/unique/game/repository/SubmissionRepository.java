@@ -33,4 +33,20 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
             LIMIT 1
             """, nativeQuery = true)
     Optional<Integer> findSmallestUniqueNumber(@Param("eventDate") LocalDate eventDate);
+
+    @Query(value = """
+            SELECT s.*
+            FROM submissions s
+            JOIN (
+                SELECT number_value
+                FROM submissions
+                WHERE event_date IN (:eventDates)
+                GROUP BY number_value
+                HAVING COUNT(*) = 1
+            ) unique_numbers ON unique_numbers.number_value = s.number_value
+            WHERE s.event_date IN (:eventDates)
+            ORDER BY s.number_value ASC
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Submission> findOverallWinningSubmission(@Param("eventDates") List<LocalDate> eventDates);
 }

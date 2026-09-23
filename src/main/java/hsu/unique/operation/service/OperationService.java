@@ -11,6 +11,7 @@ import hsu.unique.game.repository.SubmissionRepository;
 import hsu.unique.game.service.GameService;
 import hsu.unique.operation.dto.BonusExecutionResponse;
 import hsu.unique.operation.dto.FinishGameResponse;
+import hsu.unique.operation.dto.OverallGameResultResponse;
 import hsu.unique.operation.entity.BonusEvent;
 import hsu.unique.operation.repository.BonusEventRepository;
 import hsu.unique.participant.entity.DailyParticipation;
@@ -73,6 +74,25 @@ public class OperationService {
                 nextStage,
                 participantCount,
                 executedAt);
+    }
+
+    @Transactional(readOnly = true)
+    public OverallGameResultResponse recalculateOverallResult() {
+        List<LocalDate> eventDates = eventDateResolver.getEventDates();
+        Submission winningSubmission = submissionRepository.findOverallWinningSubmission(eventDates).orElse(null);
+        String winnerPhoneNumber = winningSubmission == null
+                ? null
+                : dailyParticipationRepository.findByParticipantIdAndEventDate(
+                        winningSubmission.getParticipant().getId(), winningSubmission.getEventDate())
+                        .orElseThrow()
+                        .getPhoneNumber();
+
+        return new OverallGameResultResponse(
+                eventDates,
+                winningSubmission == null ? null : NumberFormatter.toFourDigits(winningSubmission.getNumberValue()),
+                winningSubmission != null,
+                winnerPhoneNumber,
+                Instant.now());
     }
 
     @Transactional
