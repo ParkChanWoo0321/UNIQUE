@@ -81,7 +81,7 @@ public class DiagramRenderer {
             center(cx,y,s,size,color,true);
         }
         void header(String index,String title,String subtitle) {
-            text(50,48,"UN1QUE  /  BACKEND ENGINEERING",17,TEAL,true);
+            text(50,48,"또롱모  /  BACKEND ENGINEERING",17,TEAL,true);
             text(50,99,title,36,INK,true);
             text(50,136,subtitle,20,MUTED,false);
             text(w-110,100,index,44,LINE,true);
@@ -106,7 +106,7 @@ public class DiagramRenderer {
     static String esc(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");}
 
     static void architecture()throws Exception {
-        Canvas c=new Canvas(1440,1120,"UN1QUE backend architecture","Single Spring Boot application, domain layers and Cloud SQL connection.");
+        Canvas c=new Canvas(1440,1120,"또롱모 backend architecture","Single Spring Boot application, domain layers and Cloud SQL connection.");
         c.header("01","백엔드 시스템 아키텍처","단일 Spring Boot 애플리케이션 · 도메인별 책임 분리 · 관계형 데이터 저장");
         c.card(510,175,420,105,"Browser / API client","REST 요청 · participant_token 쿠키",BLUE);
         c.rect(60,175,390,105,12,PALE,null);
@@ -171,7 +171,7 @@ public class DiagramRenderer {
         return y+h;
     }
     static void erd()throws Exception {
-        Canvas c=new Canvas(1680,1450,"UN1QUE entity relationship diagram","Five physical tables, JPA foreign keys, cardinalities and unique constraints.");
+        Canvas c=new Canvas(1680,1450,"또롱모 entity relationship diagram","Five physical tables, JPA foreign keys, cardinalities and unique constraints.");
         c.header("02","데이터베이스 ERD","JPA 매핑 기준 · 물리 테이블명 · 실제 외래키 관계와 복합 UNIQUE 제약");
         table(c,600,180,"participants","브라우저 참가자 식별",BLUE,new Row[]{
             new Row("PK","id","Long"),new Row("UQ","participant_token","String"),
@@ -227,7 +227,7 @@ public class DiagramRenderer {
     }
 
     static void sequence()throws Exception {
-        Canvas c=new Canvas(1540,1510,"UN1QUE initial entry sequence","Validation, pessimistic locks, atomic updates, flush and transaction completion.");
+        Canvas c=new Canvas(1540,1510,"또롱모 initial entry sequence","Validation, pessimistic locks, atomic updates, flush and transaction completion.");
         c.header("03","최초 응모 시퀀스","POST /api/game/entries · 날짜별 초기화가 완료된 참가자 · 정상 처리와 실패 경계");
         int client=145,controller=465,service=855,db=1350;
         int[] centers={client,controller,service,db};
