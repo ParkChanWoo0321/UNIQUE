@@ -1,51 +1,66 @@
+# 또롱모
+
+**대학 축제 부스에서 운영한 숫자 응모 서비스의 Spring Boot 백엔드**
+
 > 로고 사진 넣는곳
 
-# 또롱모 | 대학 축제 숫자 응모 서비스 백엔드
+2026년 2학기 대학 축제에서 멋쟁이사자처럼 14기 동아리 부스를 운영하며 사용한 서비스입니다. 방문자는 부스의 QR 코드로 접속해 숫자를 응모했고, 당첨자에게는 현장에서 상품을 지급했습니다.
 
-**비회원 참여부터 응모 데이터 관리, 당첨자 집계까지 구현한 Spring Boot 백엔드 프로젝트입니다.**
+참가자는 `0000~9999` 중 서로 다른 숫자 3개를 제출합니다. 집계 대상에서 **정확히 한 번 제출된 숫자 중 가장 작은 숫자**가 당첨됩니다. 행사일마다 기본 3회와 최대 4회의 보너스 기회를 관리하며, 날짜별 결과와 전체 행사일을 합친 결과를 각각 계산합니다.
 
-2026년 2학기 대학 축제에서 **멋쟁이사자처럼 14기 동아리 부스를 운영하며 사용한 서비스**입니다. 방문자는 부스의 QR 코드로 접속해 숫자를 응모했고, 당첨자에게는 현장에서 상품을 지급했습니다.
-
-참가자는 `0000~9999` 중 서로 다른 숫자 3개를 제출합니다. **전체 응모에서 정확히 한 번 나온 숫자 중 가장 작은 숫자**가 당첨되며, 운영자가 보너스 단계를 열면 최대 4회의 추가 응모가 가능합니다. 여러 날 진행되는 행사에 맞춰 참여 상태와 당첨 결과를 날짜별로 관리합니다.
-
-| 항목 | 내용 |
-| --- | --- |
-| 백엔드 구현 범위 | 참가자 식별, REST API, 데이터 모델링, 응모 트랜잭션, 당첨 집계, 통합 테스트, 배포 구성 |
-| 주요 기술 | Java 17 · Spring Boot · Spring Data JPA · MySQL |
-| 배포 환경 | Google Cloud Run · Cloud SQL for MySQL |
-| 서비스 이용 흐름 | 부스 QR 접속 → 숫자 응모 → 당첨 결과 확인 → 부스에서 상품 수령 |
+이 저장소는 참가자 식별, 응모 API, 데이터 모델, 당첨 집계, 통합 테스트와 배포 구성을 담고 있습니다.
 
 > 서비스 소개 사진 넣는곳
 
-## 백엔드 핵심 구현
+## 백엔드 구현 요약
 
 | 요구사항 | 설계와 구현 |
 | --- | --- |
-| 회원가입 없이 참여하고, 다음 행사일에도 다시 응모할 수 있어야 한다 | 난수 토큰과 HttpOnly 쿠키로 참가자를 식별하고 날짜별 참여 상태를 별도 엔티티로 관리 |
-| 응모 기록과 사용 기회가 일치해야 한다 | 상태 변경과 응모 저장을 하나의 트랜잭션으로 처리하고 비관적 잠금·DB UNIQUE 제약 적용 |
-| 보너스 지급 이후 방문한 참가자도 열린 기회를 받아야 한다 | 날짜별 보너스 단계 이력을 저장하고 신규 참여 초기화에 반영 |
-| 날짜별 결과와 행사 전체 결과를 각각 구할 수 있어야 한다 | SQL 집계로 당첨자를 선정하고, 날짜별 결과 확정과 읽기 전용 통합 재계산 분리 |
+| 회원가입 없이 여러 행사일에 참여 | HttpOnly 쿠키로 참가자 식별, 날짜별 참여 상태 분리 |
+| 응모 기록과 남은 기회의 일관성 | 응모·기회 차감의 단일 트랜잭션, 비관적 잠금, 복합 UNIQUE 제약 |
+| 늦게 방문한 참가자의 보너스 반영 | 날짜별 보너스 단계 이력을 초기 참여 기회에 반영 |
+| 기존 결과를 유지한 전체 행사 집계 | SQL 고유 숫자 집계, 날짜별 확정과 읽기 전용 재계산 분리 |
 
 [아키텍처](#시스템-아키텍처) · [ERD](#데이터-모델과-제약조건) · [설계와 문제 해결](#설계와-문제-해결) · [테스트](#테스트와-검증) · [실행 방법](#로컬-실행)
 
 ## 기술 스택
 
-| 구분 | 기술 및 적용 목적 |
+| 구분 | 기술 |
 | --- | --- |
-| 언어·프레임워크 | Java 17, Spring Boot 4.1.1, Spring Web MVC — REST API 구현 |
-| 영속성 | Spring Data JPA, Hibernate, MySQL — 엔티티 매핑, 트랜잭션, 행 잠금, SQL 집계 |
-| 요청 검증·명세 | Jakarta Bean Validation, Springdoc OpenAPI 3.1.1 — 입력 검증 및 Swagger UI |
-| 테스트 | JUnit Jupiter, Spring Boot Test, MockMvc, H2 MySQL 모드 — HTTP 요청부터 DB까지 통합 검증 |
-| 빌드·배포 | Gradle Wrapper 9.7.1, Cloud Run, Cloud SQL Connector — 빌드와 MySQL 연결 |
-| 상태 확인 | Spring Boot Actuator — health 및 liveness/readiness 제공 |
+| 언어·웹 | Java 17, Spring Boot 4.1.1, Spring Web MVC |
+| 데이터 | Spring Data JPA, Hibernate, MySQL, HikariCP |
+| 검증·명세 | Jakarta Bean Validation, Springdoc OpenAPI 3.1.1 |
+| 테스트 | JUnit Jupiter, Spring Boot Test, MockMvc, H2 MySQL 모드 |
+| 빌드·배포 | Gradle Wrapper 9.7.1, Google Cloud Run, Cloud SQL Connector |
+| 상태 확인 | Spring Boot Actuator |
 
 ## 시스템 아키텍처
 
 참가자·게임·운영 도메인을 하나의 Spring Boot 애플리케이션으로 구성했습니다. Controller는 요청과 응답을, Service는 업무 규칙과 트랜잭션을, Repository는 조회·잠금·집계를 담당합니다.
 
-![또롱모 백엔드 시스템 아키텍처](docs/diagrams/architecture.png)
+```mermaid
+flowchart TB
+    client["참가자 브라우저 / 운영 API 호출"]
+    subgraph appServer["Google Cloud Run · Spring Boot"]
+        controller["REST Controllers"]
+        participantService["ParticipantService"]
+        gameService["GameService"]
+        operationService["OperationService"]
+        repository["Spring Data JPA Repositories"]
+        connection["HikariCP · JDBC · Cloud SQL Connector"]
 
-[아키텍처 SVG 확대 보기](docs/diagrams/architecture.svg)
+        controller --> participantService
+        controller --> gameService
+        controller --> operationService
+        participantService --> repository
+        gameService --> repository
+        operationService --> repository
+        repository --> connection
+    end
+    database[("Cloud SQL for MySQL")]
+    client -->|"HTTPS / JSON"| controller
+    connection --> database
+```
 
 | 패키지 | 책임 |
 | --- | --- |
@@ -62,9 +77,46 @@
 
 참가자의 식별 정보와 날짜별 참여 상태를 분리했습니다. 같은 참가자가 여러 행사일에 참여하더라도 전화번호·개인정보 동의·사용 기회·응모 완료 여부를 날짜별로 관리할 수 있습니다.
 
-![또롱모 데이터베이스 ERD](docs/diagrams/erd.png)
+ERD는 관계와 핵심 필드만 표시했습니다. 타입은 JPA의 Java 타입 기준이며, 생성·수정 시각과 이전 스키마 호환 필드 등은 생략했습니다.
 
-[ERD SVG 확대 보기](docs/diagrams/erd.svg) · 엔티티 5개의 필드와 실제 외래키 관계를 표시했습니다.
+```mermaid
+erDiagram
+    direction TB
+    participants ||--o{ daily_participations : "날짜별 참여"
+    participants ||--o{ submissions : "숫자 제출"
+    participants |o--o{ game_results : "당첨 참가자"
+    submissions |o--o| game_results : "당첨 응모"
+
+    participants {
+        Long id PK
+        String participant_token UK
+    }
+    daily_participations {
+        Long id PK
+        Long participant_id FK
+        LocalDate event_date
+        String phone_number
+        int used_attempts
+    }
+    submissions {
+        Long id PK
+        Long participant_id FK
+        LocalDate event_date
+        int number_value
+    }
+    game_results {
+        Long id PK
+        LocalDate event_date UK
+        Integer winning_number
+        Long winning_submission_id FK,UK
+        Long winner_participant_id FK
+    }
+    bonus_events {
+        Long id PK
+        LocalDate event_date
+        Integer stage
+    }
+```
 
 | 테이블 | 역할 | 주요 제약·인덱스 |
 | --- | --- | --- |
@@ -74,45 +126,55 @@
 | `bonus_events` | 날짜별 보너스 단계와 실행 이력 | `(event_date, stage)`, `event_key` 각각 UNIQUE |
 | `game_results` | 날짜별 확정 결과와 당첨 응모·참가자 | `event_date`, `result_key`, `winning_submission_id` 각각 UNIQUE |
 
-`daily_participations`와 `submissions`는 각각 참가자를 참조하며 두 테이블 사이에 직접 외래키는 없습니다. `game_results`는 당첨 응모와 참가자를 참조하고, `bonus_events`는 행사일과 단계로 이력을 구분합니다.
+`daily_participations`와 `submissions`는 각각 참가자를 참조하며 두 테이블 사이에 직접 외래키는 없습니다. `bonus_events`도 다른 테이블을 참조하는 FK 없이 행사일·단계로 관리합니다. 당첨자가 없으면 `game_results`의 당첨 번호와 두 FK는 `null`입니다.
 
-전화번호는 하이픈을 제거해 저장합니다. 응모 숫자는 정수로 저장하고 API에서는 `"0037"`처럼 네 자리 문자열로 반환합니다. ERD의 회색 필드는 이전 스키마 호환용이며, 현재 참여 상태는 `daily_participations`를 기준으로 처리합니다.
+전화번호는 하이픈을 제거해 저장하고, 숫자는 정수로 저장한 뒤 응답에서 `"0037"`처럼 네 자리 문자열로 변환합니다. `participants`에 남아 있는 과거 참여 필드와 구분하여 현재 참여 상태는 `daily_participations`를 기준으로 처리합니다.
 
 관련 코드: [Participant](src/main/java/hsu/unique/participant/entity/Participant.java) · [DailyParticipation](src/main/java/hsu/unique/participant/entity/DailyParticipation.java) · [Submission](src/main/java/hsu/unique/game/entity/Submission.java) · [BonusEvent](src/main/java/hsu/unique/operation/entity/BonusEvent.java) · [GameResult](src/main/java/hsu/unique/game/entity/GameResult.java)
 
 ## 설계와 문제 해결
 
-### 1. 비회원 식별과 날짜별 참여 상태 분리
+### 1. 비회원 참가자 식별
 
-부스 방문자가 회원가입 없이 바로 응모하면서도 같은 브라우저에서 자신의 응모 내역을 다시 확인할 수 있어야 했습니다. 또한 첫째 날의 참여가 둘째 날의 기본 기회를 소모해서는 안 됩니다.
+부스 방문자가 회원가입 없이 응모하고 같은 브라우저에서 내역을 다시 확인할 수 있도록, 32바이트 `SecureRandom` 난수를 URL-safe Base64 토큰으로 만들어 HttpOnly 쿠키로 발급했습니다. 유효한 토큰이 있으면 기존 참가자를 재사용하고 요청한 행사일의 참여 정보를 조회하거나 생성합니다.
 
-`SecureRandom`의 32바이트 난수를 URL-safe Base64 토큰으로 만들고 `participant_token` HttpOnly 쿠키로 발급했습니다. 유효한 쿠키가 있으면 기존 참가자를 재사용하며, `(participant_id, event_date)`로 해당 날짜의 참여 정보를 찾거나 생성합니다.
-
-그 결과 하나의 참가자 식별 정보를 유지하면서 행사일마다 기본 3회와 별도의 응모 내역을 관리할 수 있습니다. 같은 날짜의 전화번호 중복은 제한하되, 다른 날짜의 재참여는 허용합니다. 쿠키는 브라우저를 식별하는 수단이며 전화번호 소유권 인증은 구현하지 않았습니다.
+쿠키는 브라우저의 참가자 기록을 식별하는 수단입니다. 쿠키 삭제·다른 기기의 재접속을 동일인으로 판별하거나 전화번호 소유권을 인증하는 기능은 없습니다. 당일 전화번호 중복은 별도의 DB 제약으로 제한합니다.
 
 관련 코드: [ParticipantService](src/main/java/hsu/unique/participant/service/ParticipantService.java) · [ParticipantTokenGenerator](src/main/java/hsu/unique/participant/service/ParticipantTokenGenerator.java) · [ParticipantCookieManager](src/main/java/hsu/unique/participant/service/ParticipantCookieManager.java)
 
 ### 2. 응모 저장과 기회 차감의 일관성
 
-최초 응모는 숫자 3개, 전화번호, 개인정보 동의, 사용 기회를 함께 변경합니다. 일부만 저장되면 기회는 소모됐지만 응모가 누락되는 상태가 생길 수 있습니다. 중복 요청이 같은 남은 기회를 읽는 상황도 고려해야 합니다.
+최초 응모에서는 숫자 3건과 연락처·동의·사용 기회가 함께 변경됩니다. 일부만 저장되는 상태를 막기 위해 `GameService.createEntry()`의 변경 작업을 하나의 트랜잭션으로 묶었습니다.
 
-`GameService.createEntry()`에서 다음 과정을 하나의 트랜잭션으로 처리했습니다.
+중복 요청이 같은 남은 기회를 읽고 변경하지 않도록 참가자 행, 날짜별 참여 행 순서로 `PESSIMISTIC_WRITE` 잠금을 획득합니다. 서로 다른 참가자의 전화번호 중복은 사전 조회에 더해 `(event_date, phone_number)` UNIQUE 제약으로 제한합니다.
 
-1. 행사일·응모 가능 상태와 숫자 3개·동의를 검증합니다.
-2. 참가자 행 → 날짜별 참여 행 순서로 `PESSIMISTIC_WRITE` 잠금을 획득합니다.
-3. 최초 응모 완료 여부와 같은 날짜의 전화번호 중복을 확인합니다.
-4. 연락처·동의 시각·사용 기회·완료 상태를 변경하고 응모 3건을 저장합니다.
-5. 트랜잭션 커밋 후 성공 응답을 반환하며, 처리 중 예외가 발생하면 함께 롤백합니다.
+아래 시퀀스는 날짜별 초기화가 끝난 참가자의 정상 응모 경로입니다. 폭을 줄이기 위해 Controller와 트랜잭션 프록시를 포함한 서비스 호출을 `응모 API`로 묶었습니다.
 
-**잠금과 UNIQUE 제약의 역할을 구분했습니다.** 같은 참가자의 겹치는 응모 요청은 행 잠금으로 상태 확인과 변경을 순서대로 처리합니다. 서로 다른 참가자가 같은 전화번호로 요청하는 경우는 사전 중복 조회와 `(event_date, phone_number)` UNIQUE 제약으로 제한합니다.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant client as 참가자
+    participant api as 응모 API
+    participant db as Repository / DB
 
-추가 응모에서도 동일한 잠금 순서를 사용합니다. 최초 응모 완료 여부, 남은 기회, 당일 본인이 제출한 번호와의 중복을 확인하고 응모 저장과 기회 1회 차감을 함께 처리합니다.
+    client->>api: POST /api/game/entries
+    api->>api: 요청 DTO 검증 후 트랜잭션 시작
+    api->>api: 행사일 검증
+    api->>db: 확정 결과 존재 여부 조회
+    api->>api: 응모 상태·숫자·동의 검증
+    api->>db: 참가자 행 잠금
+    api->>db: 날짜별 참여 행 잠금
+    api->>api: 최초 응모 여부 확인
+    api->>db: 당일 전화번호 중복 조회
+    api->>db: 연락처·동의·기회·완료 상태 반영 및 flush
+    api->>db: 응모 숫자 3건 저장 및 flush
+    api->>db: COMMIT · 잠금 해제
+    api-->>client: 200 OK · 응모 내역과 남은 기회
+```
 
-![또롱모 최초 응모 시퀀스 다이어그램](docs/diagrams/entry-sequence.png)
+`flush`는 SQL 반영 시점이며 최종 커밋과 구분됩니다. 처리 중 비즈니스 예외나 DB 오류가 발생하면 트랜잭션을 롤백합니다. 추가 응모도 같은 잠금 순서로 최초 응모 완료·남은 기회·본인 번호 중복을 확인한 뒤 숫자 1건 저장과 기회 차감을 함께 수행합니다.
 
-[응모 시퀀스 SVG 확대 보기](docs/diagrams/entry-sequence.svg) · `flush`와 최종 커밋을 구분하고, 실제 검증·잠금·저장 순서를 표시했습니다.
-
-현재 잠금 범위는 참가자와 날짜별 참여 행입니다. 결과 확정과 진행 중인 응모 사이의 경합은 행사일 단위 제어가 추가로 필요한 영역입니다.
+현재 잠금은 참가자별 응모 처리를 대상으로 합니다. 결과 확정과 진행 중 응모를 함께 직렬화하는 행사일 단위 잠금은 아직 없습니다.
 
 관련 코드: [GameService.createEntry / submitBonusNumber](src/main/java/hsu/unique/game/service/GameService.java) · [ParticipantRepository](src/main/java/hsu/unique/participant/repository/ParticipantRepository.java) · [DailyParticipationRepository](src/main/java/hsu/unique/participant/repository/DailyParticipationRepository.java)
 
@@ -120,15 +182,15 @@
 
 보너스 지급 시점의 참가자만 갱신하면, 이후 방문한 참가자는 이미 열린 추가 기회를 받지 못합니다. 이를 처리하기 위해 보너스 지급을 날짜별 단계 이력으로 저장했습니다.
 
-보너스 API는 해당 날짜의 참여 행을 잠근 뒤 다음 단계 이력을 저장하고 기회를 1회씩 추가합니다. 두 작업은 하나의 트랜잭션으로 처리합니다. 이후 신규 참가자가 초기화하면 저장된 단계 수를 읽어 추가 기회에 반영합니다.
+보너스 API는 해당 날짜에 초기화된 참여 행을 잠근 뒤 다음 단계 이력을 저장하고 기회를 1회씩 추가합니다. 두 작업은 하나의 트랜잭션으로 처리합니다. 이후 신규 참가자가 초기화하면 저장된 단계 수를 읽어 추가 기회에 반영합니다.
 
 예를 들어 2단계까지 열린 뒤 참여한 사람은 **기본 3회 + 추가 2회 = 총 5회**를 받습니다. 최대 4단계까지만 열 수 있으며 `(event_date, stage)` UNIQUE 제약으로 같은 단계의 중복 저장을 제한합니다.
 
-별개의 정상 호출은 다음 단계를 여는 방식이므로 요청 재시도에 대한 멱등성을 보장하는 API는 아닙니다. 보너스 지급과 신규 초기화가 동시에 실행되는 경계도 후속 동시성 검증 대상으로 구분했습니다.
+정상 호출마다 다음 단계를 여는 방식이므로 네트워크 재시도를 구분하는 멱등 API는 아닙니다. 보너스 지급과 신규 초기화가 동시에 실행되는 경우는 추가 검증이 필요합니다.
 
 관련 코드: [OperationService.executeBonus](src/main/java/hsu/unique/operation/service/OperationService.java) · [ParticipantService.initialize](src/main/java/hsu/unique/participant/service/ParticipantService.java)
 
-### 4. SQL 집계로 당첨 조건 표현
+### 4. SQL 당첨 집계와 기존 결과를 보존하는 재계산
 
 당첨 규칙은 **제출 횟수가 정확히 1회인 숫자 중 최솟값**입니다. 응모 목록 전체를 애플리케이션에 적재하지 않고 DB에서 집계와 정렬을 수행하도록 구현했습니다.
 
@@ -146,10 +208,6 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 
 날짜별 종료 API는 집계 결과를 `game_results`에 저장합니다. 이미 확정된 날짜의 재확정 요청과 이후 새로 들어오는 응모 요청은 거절합니다. 조회 조건에 맞춰 `(event_date, number_value)` 복합 인덱스를 정의했으며, 성능 개선율은 별도로 측정하지 않았습니다.
 
-관련 코드: [SubmissionRepository.findSmallestUniqueNumber](src/main/java/hsu/unique/game/repository/SubmissionRepository.java) · [OperationService.finishGame](src/main/java/hsu/unique/operation/service/OperationService.java)
-
-### 5. 기존 결과를 보존하는 행사 전체 재계산
-
 여러 행사일을 합쳐 당첨자 1명을 선정할 때는 날짜별 당첨자만 비교할 수 없습니다. 하루에는 고유했던 숫자가 다른 날에도 제출됐다면 전체 집계에서는 제외해야 하기 때문입니다.
 
 `EVENT_DATES`에 포함된 전체 응모를 다시 집계하는 재계산 API를 구현했습니다. 같은 참가자가 다른 날짜에 제출한 같은 숫자도 중복으로 계산합니다. 당첨자의 연락처는 **당첨 응모가 발생한 날짜의 참여 정보**에서 조회합니다.
@@ -161,7 +219,7 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 | 저장·상태 변경 | 날짜별 결과 저장, 이후 해당 날짜 응모 차단 | 기존 응모·결과·마감 상태 변경 없음 |
 | 반복 호출 | 이미 확정된 경우 거절 | 호출 시점의 응모로 다시 계산 |
 
-재계산 서비스는 `@Transactional(readOnly = true)`로 실행하며 저장·수정 메서드를 호출하지 않습니다. 따라서 날짜별 확정 결과를 유지하면서 전체 행사 결과를 별도로 확인할 수 있습니다. 행사일 밖의 응모와 날짜가 없는 기존 데이터는 집계에서 제외합니다.
+재계산 서비스는 `@Transactional(readOnly = true)`로 실행하며 저장·수정 메서드를 호출하지 않습니다. 행사일 밖의 응모와 날짜가 없는 기존 데이터는 집계에서 제외합니다. 반복 호출 후 기존 응모와 날짜별 결과가 유지되는지는 통합 테스트로 검증했습니다.
 
 관련 코드: [SubmissionRepository.findOverallWinningSubmission](src/main/java/hsu/unique/game/repository/SubmissionRepository.java) · [OperationService.recalculateOverallResult](src/main/java/hsu/unique/operation/service/OperationService.java)
 
@@ -181,7 +239,7 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 
 조회·초기화·보너스·종료 API의 `eventDate` 쿼리 파라미터를 생략하면 설정된 첫 행사일을 사용합니다. 최초·추가 응모는 JSON 본문에 날짜가 필수이며, 통합 재계산은 날짜나 본문을 받지 않습니다.
 
-참가자용 결과 응답에는 당첨 번호와 본인의 당첨 여부만 제공하고 연락처는 제외했습니다. 종료·재계산 응답에는 경품 지급을 위한 당첨자 연락처가 포함됩니다. **현재 운영 API에 별도 인증·인가가 없으므로 접근 제어는 우선 개선 과제입니다.**
+참가자용 결과 응답에는 연락처를 제외하고, 종료·재계산 응답에는 경품 지급을 위한 당첨자 연락처를 포함했습니다. 현재 운영 API에는 별도 인증·인가가 없어 응답 분리만으로 연락처 접근을 보호하지는 못합니다.
 
 `@RestControllerAdvice`에서 오류 응답을 `code`, `message` 형식으로 통일했습니다. 입력 오류는 `400`, 참가자 식별 실패는 `404`, 중복 응모·기회 소진 등 상태 충돌은 `409`, 예상하지 못한 예외는 `500`으로 구분합니다.
 
@@ -198,7 +256,7 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 
 `@SpringBootTest`와 MockMvc를 사용해 HTTP 요청 → 서비스 → Repository → DB를 연결한 통합 테스트를 작성했습니다. H2를 MySQL 모드로 실행하고 각 테스트 전에 데이터를 정리합니다.
 
-**2026년 10월 23일 Java 17 환경에서 통합 테스트 14개 통과, 실패·오류·건너뜀 0개, Gradle 빌드 성공을 확인했습니다.**
+**검증 기록: 2026년 10월 23일, Java 17, 통합 테스트 14개 통과, 실패·오류·건너뜀 0개, Gradle 빌드 성공.**
 
 | 검증 영역 | 테스트 시나리오 |
 | --- | --- |
@@ -217,7 +275,7 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 
 ## 배포와 운영 구성
 
-Cloud Run에서 애플리케이션을 실행하고 Cloud SQL for MySQL에 연결하는 구성을 사용했습니다. DB 접속 정보, 행사 일정, 쿠키와 CORS 정책은 환경변수로 분리했습니다.
+Cloud Run에서 애플리케이션을 실행하고 Cloud SQL for MySQL에 연결하는 구성을 사용했습니다. DB 접속 정보, 행사 일정, 쿠키와 CORS 정책은 환경변수로 분리했습니다. 아래는 저장소의 배포 설정이며 현재 서비스 가동 상태를 의미하지 않습니다.
 
 | 운영 항목 | 구성 |
 | --- | --- |
@@ -230,14 +288,14 @@ Cloud Run에서 애플리케이션을 실행하고 Cloud SQL for MySQL에 연결
 
 관련 설정: [application.yml](src/main/resources/application.yml) · [build.gradle](build.gradle) · [.gcloudignore](.gcloudignore)
 
-## 개선 과제
+## 현재 한계와 개선 방향
 
-구현 범위와 검증 결과를 바탕으로 다음 보완 항목을 정리했습니다.
-
-- **운영 API 보호**: 보너스 지급·결과 확정·연락처 조회에 인증과 권한 검증을 적용하고 쿠키 기반 변경 요청의 CSRF 대응을 보완합니다.
-- **행사 단위 동시성 검증**: 결과 확정과 진행 중 응모, 보너스 지급과 신규 초기화 사이의 경합을 검증하고 행사일 단위 처리 순서를 제어합니다.
-- **스키마 변경 관리**: `ddl-auto=update`를 버전 기반 마이그레이션으로 전환하고 기존 호환 필드와 nullable 행사일 데이터를 정리합니다.
-- **검증 확대**: 실제 MySQL 기반 동시 요청·시간 경계 테스트, 실행 계획 분석과 부하 측정을 추가하고 CI에서 반복 실행합니다.
+| 항목 | 다음 단계 |
+| --- | --- |
+| 운영 API 보호 | 보너스 지급·결과 확정·연락처 조회에 인증·권한 검증을 적용하고 쿠키 기반 변경 요청의 CSRF 대응 보완 |
+| 동시성 경계 | 결과 확정과 응모, 보너스 지급과 초기화의 경합을 실제 MySQL에서 검증하고 행사일 단위 처리 순서 설계 |
+| 스키마 관리 | `ddl-auto=update`를 버전 기반 마이그레이션으로 전환하고 호환 필드·nullable 행사일 데이터 정리 |
+| 검증 확대 | 시간 경계 테스트, 실행 계획 분석, 부하 측정과 CI 반복 실행 추가 |
 
 ## 로컬 실행
 
