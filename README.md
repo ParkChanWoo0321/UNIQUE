@@ -6,7 +6,7 @@
 
 2026년 2학기 대학 축제에서 멋쟁이사자처럼 14기 동아리 부스를 운영하며 사용한 서비스입니다. 방문자는 부스의 QR 코드로 접속해 숫자를 응모했고, 당첨자에게는 현장에서 상품을 지급했습니다.
 
-참가자는 `0000~9999` 중 서로 다른 숫자 3개를 제출합니다. 집계 대상에서 **정확히 한 번 제출된 숫자 중 가장 작은 숫자**가 당첨됩니다. 행사일마다 기본 3회와 최대 4회의 보너스 기회를 관리하며, 날짜별 결과와 전체 행사일을 합친 결과를 각각 계산합니다.
+참가자는 최초 응모에서 `0000~9999` 중 서로 다른 숫자 3개를 한 번에 제출합니다. 보너스 단계가 열리면 단계마다 숫자 1개씩, 최대 4개를 추가로 제출할 수 있습니다. 집계 대상에서 **정확히 한 번 제출된 숫자 중 가장 작은 숫자**가 당첨됩니다. 참여 상태와 결과는 날짜별로 관리하며, 전체 행사일을 합친 당첨자도 별도로 계산합니다.
 
 이 저장소는 참가자 식별, 응모 API, 데이터 모델, 당첨 집계, 통합 테스트와 배포 구성을 담고 있습니다.
 
@@ -16,7 +16,7 @@
 
 | 요구사항 | 설계와 구현 |
 | --- | --- |
-| 회원가입 없이 여러 행사일에 참여 | HttpOnly 쿠키로 참가자 식별, 날짜별 참여 상태 분리 |
+| 회원가입 없이 여러 행사일에 참여 | 난수 토큰을 담은 HttpOnly 쿠키로 참가자 식별, 날짜별 참여 상태 분리 |
 | 응모 기록과 남은 기회의 일관성 | 응모·기회 차감의 단일 트랜잭션, 비관적 잠금, 복합 UNIQUE 제약 |
 | 늦게 방문한 참가자의 보너스 반영 | 날짜별 보너스 단계 이력을 초기 참여 기회에 반영 |
 | 기존 결과를 유지한 전체 행사 집계 | SQL 고유 숫자 집계, 날짜별 확정과 읽기 전용 재계산 분리 |
@@ -71,7 +71,7 @@ flowchart TB
 
 조회에는 `@Transactional(readOnly = true)`, 데이터 변경에는 `@Transactional`을 적용했습니다. `open-in-view=false`로 설정하고 서비스의 트랜잭션 안에서 연관 데이터를 조회해 응답 DTO를 구성합니다.
 
-아키텍처는 저장소의 애플리케이션 구조와 Cloud Run·Cloud SQL 배포 구성을 나타냅니다. 현재 클라우드 리소스의 가동 상태를 표시한 그림은 아닙니다.
+아키텍처는 애플리케이션의 계층 구조와 Cloud Run·Cloud SQL 배포 구성을 나타냅니다.
 
 ## 데이터 모델과 제약조건
 
@@ -82,10 +82,10 @@ ERD는 관계와 핵심 필드만 표시했습니다. 타입은 JPA의 Java 타�
 ```mermaid
 erDiagram
     direction TB
-    participants ||--o{ daily_participations : "날짜별 참여"
-    participants ||--o{ submissions : "숫자 제출"
-    participants |o--o{ game_results : "당첨 참가자"
-    submissions |o--o| game_results : "당첨 응모"
+    participants ||..o{ daily_participations : "날짜별 참여"
+    participants ||..o{ submissions : "숫자 제출"
+    participants |o..o{ game_results : "당첨 참가자"
+    submissions |o..o| game_results : "당첨 응모"
 
     participants {
         Long id PK
@@ -126,7 +126,7 @@ erDiagram
 | `bonus_events` | 날짜별 보너스 단계와 실행 이력 | `(event_date, stage)`, `event_key` 각각 UNIQUE |
 | `game_results` | 날짜별 확정 결과와 당첨 응모·참가자 | `event_date`, `result_key`, `winning_submission_id` 각각 UNIQUE |
 
-`daily_participations`와 `submissions`는 각각 참가자를 참조하며 두 테이블 사이에 직접 외래키는 없습니다. `bonus_events`도 다른 테이블을 참조하는 FK 없이 행사일·단계로 관리합니다. 당첨자가 없으면 `game_results`의 당첨 번호와 두 FK는 `null`입니다.
+각 테이블은 독립적인 `id`를 PK로 사용하므로 FK 관계를 비식별 관계인 점선으로 표시했습니다. `daily_participations`와 `submissions`는 각각 참가자를 참조하며 두 테이블 사이에 직접 외래키는 없습니다. `bonus_events`도 다른 테이블을 참조하는 FK 없이 행사일·단계로 관리합니다. 당첨자가 없으면 `game_results`의 당첨 번호와 두 FK는 `null`입니다.
 
 전화번호는 하이픈을 제거해 저장하고, 숫자는 정수로 저장한 뒤 응답에서 `"0037"`처럼 네 자리 문자열로 변환합니다. `participants`에 남아 있는 과거 참여 필드와 구분하여 현재 참여 상태는 `daily_participations`를 기준으로 처리합니다.
 
@@ -148,7 +148,7 @@ erDiagram
 
 중복 요청이 같은 남은 기회를 읽고 변경하지 않도록 참가자 행, 날짜별 참여 행 순서로 `PESSIMISTIC_WRITE` 잠금을 획득합니다. 서로 다른 참가자의 전화번호 중복은 사전 조회에 더해 `(event_date, phone_number)` UNIQUE 제약으로 제한합니다.
 
-아래 시퀀스는 날짜별 초기화가 끝난 참가자의 정상 응모 경로입니다. 폭을 줄이기 위해 Controller와 트랜잭션 프록시를 포함한 서비스 호출을 `응모 API`로 묶었습니다.
+아래는 날짜별 초기화가 끝난 참가자의 정상 응모 경로입니다. `응모 API`는 Controller와 트랜잭션 프록시를 포함한 서비스 호출을 나타냅니다.
 
 ```mermaid
 sequenceDiagram
@@ -221,21 +221,21 @@ A가 `[1, 2, 8]`, B가 `[1, 2, 3]`을 제출했다면 `1`과 `2`는 중복으로
 
 재계산 서비스는 `@Transactional(readOnly = true)`로 실행하며 저장·수정 메서드를 호출하지 않습니다. 행사일 밖의 응모와 날짜가 없는 기존 데이터는 집계에서 제외합니다. 반복 호출 후 기존 응모와 날짜별 결과가 유지되는지는 통합 테스트로 검증했습니다.
 
-관련 코드: [SubmissionRepository.findOverallWinningSubmission](src/main/java/hsu/unique/game/repository/SubmissionRepository.java) · [OperationService.recalculateOverallResult](src/main/java/hsu/unique/operation/service/OperationService.java)
+관련 코드: [SubmissionRepository](src/main/java/hsu/unique/game/repository/SubmissionRepository.java) · [OperationService](src/main/java/hsu/unique/operation/service/OperationService.java)
 
 ## API 설계
 
-| 구분 | Method | Endpoint | 기능 |
-| --- | --- | --- | --- |
-| 참가자 | `POST` | `/api/participants/initialize` | 쿠키 식별 및 날짜별 참여 초기화 |
-| 참가자 | `GET` | `/api/participants/me` | 내 응모 번호·남은 기회 조회 |
-| 게임 | `GET` | `/api/game/status` | 참여 완료 인원·보너스 단계·진행 상태 조회 |
-| 게임 | `POST` | `/api/game/entries` | 숫자 3개·전화번호·동의로 최초 응모 |
-| 게임 | `POST` | `/api/game/submissions` | 추가 기회로 숫자 1개 제출 |
-| 게임 | `GET` | `/api/game/result` | 날짜별 당첨 번호·본인 당첨 여부 조회 |
-| 운영 | `POST` | `/api/operations/bonus` | 선택 날짜의 다음 보너스 단계 개방 |
-| 운영 | `POST` | `/api/operations/finish` | 선택 날짜의 결과 계산·확정 |
-| 운영 | `POST` | `/api/operations/recalculate` | 전체 행사일의 당첨자 재계산 |
+| Method | Endpoint | 기능 |
+| --- | --- | --- |
+| `POST` | `/api/participants/initialize` | 참가자 식별·날짜별 참여 초기화 |
+| `GET` | `/api/participants/me` | 내 응모 번호·남은 기회 조회 |
+| `GET` | `/api/game/status` | 참여 완료 인원·보너스 단계·진행 상태 조회 |
+| `POST` | `/api/game/entries` | 숫자 3개·전화번호·동의로 최초 응모 |
+| `POST` | `/api/game/submissions` | 추가 기회로 숫자 1개 제출 |
+| `GET` | `/api/game/result` | 날짜별 당첨 번호·본인 당첨 여부 조회 |
+| `POST` | `/api/operations/bonus` | 선택 날짜의 다음 보너스 단계 개방 |
+| `POST` | `/api/operations/finish` | 선택 날짜의 결과 계산·확정 |
+| `POST` | `/api/operations/recalculate` | 전체 행사일의 당첨자 재계산 |
 
 조회·초기화·보너스·종료 API의 `eventDate` 쿼리 파라미터를 생략하면 설정된 첫 행사일을 사용합니다. 최초·추가 응모는 JSON 본문에 날짜가 필수이며, 통합 재계산은 날짜나 본문을 받지 않습니다.
 
