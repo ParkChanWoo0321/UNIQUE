@@ -2,7 +2,7 @@
 
 **대학 축제 부스에서 운영한 숫자 응모 서비스의 Spring Boot 백엔드**
 
-> 로고 사진 넣는곳
+<img width="416" height="271" alt="Image" src="https://github.com/user-attachments/assets/4dd63d3b-f7b4-402d-b691-a55b413f1343" />
 
 2026년 2학기 대학 축제에서 멋쟁이사자처럼 14기 동아리 부스를 운영하며 사용한 서비스입니다. 방문자는 부스의 QR 코드로 접속해 숫자를 응모했고, 당첨자에게는 현장에서 상품을 지급했습니다.
 
