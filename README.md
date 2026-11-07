@@ -10,7 +10,7 @@
 
 이 저장소는 참가자 식별, 응모 API, 데이터 모델, 당첨 집계, 통합 테스트와 배포 구성을 담고 있습니다.
 
-> 서비스 소개 사진 넣는곳
+<img width="395" height="697" alt="Image" src="https://github.com/user-attachments/assets/a2e10a4d-fc44-4fe5-b3d9-f6df73e39448" />
 
 ## 백엔드 구현 요약
 
